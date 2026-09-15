@@ -1,0 +1,16 @@
+[Unit]
+Description=Halium Android 8.1 Services LXC Container
+DefaultDependencies=no
+After=local-fs.target
+Before=display-manager.service plasma-mobile.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/mkdir -p /run/systemd/resolve
+ExecStart=/usr/bin/lxc-start -n android -F
+ExecStop=/usr/bin/lxc-stop -n android -k
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target
