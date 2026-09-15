@@ -15,13 +15,89 @@ ApplicationWindow {
     readonly property color breezeDark: "#1f232a"
     readonly property color breezeSurface: "#2a2e38"
     readonly property color breezeAccent: "#3daee9"
+    readonly property color breezeAccentActive: "#1d99f3"
     readonly property color breezeText: "#fcfcfc"
     readonly property color breezeTextDim: "#a0a5ad"
     readonly property color breezeCard: "#23262e"
+    readonly property color breezeBorder: Qt.rgba(1, 1, 1, 0.08)
 
+    // Shell state
     property bool quickSettingsOpen: false
+    property bool appSwitcherOpen: false
     property bool appDrawerOpen: false
     property string activeApp: ""
+    property real brightnessVal: 0.75
+    property real volumeVal: 0.60
+
+    // Running tasks model (for Task Switcher / Overview)
+    ListModel {
+        id: openTasksModel
+        ListElement { name: "Terminal"; icon: "⌨"; color: "#232629"; summary: "chris@angler-plasma:~$ uname -r\n3.10.73-halium-angler" }
+        ListElement { name: "Dolphin"; icon: "📁"; color: "#1d99f3"; summary: "Home > Documents\nStorage: 64 GB internal" }
+        ListElement { name: "Angelfish"; icon: "🌐"; color: "#27ae60"; summary: "kde.org/plasma-mobile\nPlasma 6 on Wayland" }
+        ListElement { name: "Settings"; icon: "⚙"; color: "#7f8c8d"; summary: "Nexus 6P (MSM8994)\nlibhybris hwcomposer" }
+    }
+
+    // Installed apps model (Full app list for Drawer)
+    ListModel {
+        id: allAppsModel
+        ListElement { name: "Terminal"; icon: "⌨"; color: "#232629"; desc: "KDE Konsole mobile terminal" }
+        ListElement { name: "Dolphin"; icon: "📁"; color: "#1d99f3"; desc: "Plasma file manager" }
+        ListElement { name: "Angelfish"; icon: "🌐"; color: "#27ae60"; desc: "Touch-optimized web browser" }
+        ListElement { name: "Settings"; icon: "⚙"; color: "#7f8c8d"; desc: "System hardware & network" }
+        ListElement { name: "Dialer"; icon: "📞"; color: "#2ecc71"; desc: "Phone dialer & contacts" }
+        ListElement { name: "Messages"; icon: "💬"; color: "#3498db"; desc: "SMS / MMS messaging" }
+        ListElement { name: "Camera"; icon: "📷"; color: "#e67e22"; desc: "12.3 MP Sony IMX377" }
+        ListElement { name: "Discover"; icon: "🛍"; color: "#9b59b6"; desc: "Software Center & Flatpaks" }
+        ListElement { name: "Calculator"; icon: "🧮"; color: "#e74c3c"; desc: "KCalc mobile" }
+        ListElement { name: "Clock"; icon: "⏰"; color: "#f39c12"; desc: "Alarms, timers & stopwatch" }
+        ListElement { name: "Media"; icon: "🎵"; color: "#16a085"; desc: "Elisa music player" }
+        ListElement { name: "Notes"; icon: "📝"; color: "#8e44ad"; desc: "Quick notes and memos" }
+    }
+
+    // Quick toggle states
+    property var quickToggles: [
+        { label: "Wi-Fi", icon: "📶", active: true },
+        { label: "Cellular", icon: "📡", active: true },
+        { label: "Bluetooth", icon: "ᛒ", active: false },
+        { label: "Flashlight", icon: "🔦", active: false },
+        { label: "Auto-Rotate", icon: "🔄", active: true },
+        { label: "Night Light", icon: "🌙", active: true }
+    ]
+
+    function launchApp(appName) {
+        // Add to tasks if not present
+        var found = false;
+        for (var i = 0; i < openTasksModel.count; i++) {
+            if (openTasksModel.get(i).name === appName) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            openTasksModel.append({
+                name: appName,
+                icon: "📱",
+                color: root.breezeAccent,
+                summary: "Active Plasma 6 Wayland Surface"
+            });
+        }
+        root.activeApp = appName;
+        root.appDrawerOpen = false;
+        root.appSwitcherOpen = false;
+        root.quickSettingsOpen = false;
+    }
+
+    function closeTask(index) {
+        var name = openTasksModel.get(index).name;
+        openTasksModel.remove(index);
+        if (root.activeApp === name) {
+            root.activeApp = "";
+        }
+        if (openTasksModel.count === 0) {
+            root.appSwitcherOpen = false;
+        }
+    }
 
     // Background Wallpaper
     Rectangle {
@@ -32,7 +108,6 @@ ApplicationWindow {
             GradientStop { position: 1.0; color: "#0d1117" }
         }
 
-        // Geometric decorative accents reminiscent of KDE Plasma 6 wallpaper
         Canvas {
             anchors.fill: parent
             opacity: 0.18
@@ -61,11 +136,11 @@ ApplicationWindow {
     // Top Status Bar (Plasma 6 Mobile Panel)
     Rectangle {
         id: statusBar
-        z: 20
+        z: 30
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 34
+        height: 36
         color: root.quickSettingsOpen ? root.breezeDark : Qt.rgba(0.08, 0.09, 0.11, 0.75)
 
         Behavior on color { ColorAnimation { duration: 200 } }
@@ -92,51 +167,50 @@ ApplicationWindow {
 
             Item { Layout.fillWidth: true }
 
-            // Status indicators (WiFi, Battery, Bluetooth, Halium status)
             RowLayout {
                 spacing: 10
-
-                Text {
-                    text: "WiFi 5G"
-                    font.pixelSize: 11
-                    color: root.breezeTextDim
-                }
-                Text {
-                    text: "85%"
-                    font.pixelSize: 11
-                    font.bold: true
-                    color: root.breezeAccent
-                }
+                Text { text: "LTE 4G"; font.pixelSize: 11; color: root.breezeTextDim }
+                Text { text: "📶"; font.pixelSize: 11; color: root.breezeText }
+                Text { text: "🔋 85%"; font.pixelSize: 11; font.bold: true; color: root.breezeAccent }
             }
         }
 
+        // Tap or swipe down from top to toggle Quick Settings
         MouseArea {
             anchors.fill: parent
-            onClicked: {
-                root.quickSettingsOpen = !root.quickSettingsOpen;
-                if (root.quickSettingsOpen) root.appDrawerOpen = false;
+            property real startY: 0
+            onPressed: (mouse) => startY = mouse.y
+            onReleased: (mouse) => {
+                if (mouse.y - startY > 15 || startY - mouse.y < 5) {
+                    root.quickSettingsOpen = !root.quickSettingsOpen;
+                    if (root.quickSettingsOpen) {
+                        root.appDrawerOpen = false;
+                        root.appSwitcherOpen = false;
+                    }
+                }
             }
         }
     }
 
-    // Main Desktop / Homescreen Area
+    // Homescreen View
     Item {
         id: desktopArea
         anchors.top: statusBar.bottom
         anchors.bottom: navigationBar.top
         anchors.left: parent.left
         anchors.right: parent.right
+        visible: root.activeApp === "" && !root.appSwitcherOpen && !root.appDrawerOpen
 
         // Digital Clock Widget (Plasma 6 Lock/Home Widget)
         ColumnLayout {
             anchors.top: parent.top
-            anchors.topMargin: 40
+            anchors.topMargin: 36
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: 4
 
             Text {
                 text: Qt.formatTime(new Date(), "hh:mm")
-                font.pixelSize: 56
+                font.pixelSize: 60
                 font.weight: Font.Light
                 color: root.breezeText
                 Layout.alignment: Qt.AlignHCenter
@@ -150,7 +224,7 @@ ApplicationWindow {
             }
 
             Text {
-                text: "Nexus 6P • Snapdragon 810 • Plasma 6"
+                text: "Nexus 6P • Halium 8.1 • Wayland"
                 font.pixelSize: 11
                 color: root.breezeTextDim
                 Layout.alignment: Qt.AlignHCenter
@@ -158,27 +232,17 @@ ApplicationWindow {
             }
         }
 
-        // Homescreen Pinned Apps Grid
+        // Homescreen Pinned Apps Grid (Favorites)
         GridLayout {
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 30
+            anchors.bottom: swipeUpHint.top
+            anchors.bottomMargin: 24
             anchors.horizontalCenter: parent.horizontalCenter
             columns: 4
-            rowSpacing: 24
+            rowSpacing: 22
             columnSpacing: 22
 
             Repeater {
-                model: [
-                    { name: "Terminal", icon: "⌨", color: "#232629" },
-                    { name: "Dolphin", icon: "📁", color: "#1d99f3" },
-                    { name: "Angelfish", icon: "🌐", color: "#27ae60" },
-                    { name: "Settings", icon: "⚙", color: "#7f8c8d" },
-                    { name: "Dialer", icon: "📞", color: "#2ecc71" },
-                    { name: "Messages", icon: "💬", color: "#3498db" },
-                    { name: "Camera", icon: "📷", color: "#e67e22" },
-                    { name: "Discover", icon: "🛍", color: "#9b59b6" }
-                ]
-
+                model: 8
                 delegate: ColumnLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
@@ -187,30 +251,302 @@ ApplicationWindow {
                         width: 58
                         height: 58
                         radius: 18
-                        color: modelData.color
-                        border.color: Qt.rgba(1, 1, 1, 0.15)
+                        color: allAppsModel.get(index).color
+                        border.color: root.breezeBorder
                         border.width: 1
 
                         Text {
                             anchors.centerIn: parent
-                            text: modelData.icon
+                            text: allAppsModel.get(index).icon
                             font.pixelSize: 26
                         }
 
                         MouseArea {
                             anchors.fill: parent
-                            onClicked: {
-                                console.log("Launching: " + modelData.name);
-                                root.activeApp = modelData.name;
-                            }
+                            onClicked: root.launchApp(allAppsModel.get(index).name)
                         }
                     }
 
                     Text {
-                        text: modelData.name
+                        text: allAppsModel.get(index).name
                         font.pixelSize: 11
                         color: root.breezeText
                         Layout.alignment: Qt.AlignHCenter
+                    }
+                }
+            }
+        }
+
+        // App Drawer Swipe Up Handle / Indicator
+        Rectangle {
+            id: swipeUpHint
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 10
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 140
+            height: 28
+            radius: 14
+            color: Qt.rgba(1, 1, 1, 0.08)
+
+            RowLayout {
+                anchors.centerIn: parent
+                spacing: 6
+                Text { text: "▲"; font.pixelSize: 10; color: root.breezeTextDim }
+                Text { text: "All Apps"; font.pixelSize: 11; font.bold: true; color: root.breezeTextDim }
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: root.appDrawerOpen = true
+            }
+        }
+
+        // Gesture detector on homescreen for swipe up to open App Drawer
+        MouseArea {
+            anchors.fill: parent
+            anchors.bottomMargin: 50
+            z: -1
+            property real startY: 0
+            onPressed: (mouse) => startY = mouse.y
+            onReleased: (mouse) => {
+                if (startY - mouse.y > 60) {
+                    root.appDrawerOpen = true;
+                }
+            }
+        }
+    }
+
+    // App Drawer (Full Application Grid with Search)
+    Rectangle {
+        id: appDrawerPanel
+        z: 22
+        anchors.top: statusBar.bottom
+        anchors.bottom: navigationBar.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        visible: root.appDrawerOpen
+        color: root.breezeDark
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+
+            // Search Bar
+            Rectangle {
+                Layout.fillWidth: true
+                height: 42
+                radius: 12
+                color: root.breezeSurface
+                border.color: root.breezeBorder
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+
+                    Text { text: "🔍"; font.pixelSize: 14; color: root.breezeTextDim }
+
+                    TextInput {
+                        id: searchInput
+                        Layout.fillWidth: true
+                        color: root.breezeText
+                        font.pixelSize: 14
+                        text: ""
+                        Text {
+                            anchors.fill: parent
+                            text: searchInput.text === "" ? "Search installed apps..." : ""
+                            color: root.breezeTextDim
+                            font.pixelSize: 14
+                            visible: !searchInput.activeFocus && searchInput.text === ""
+                        }
+                    }
+
+                    Text {
+                        text: "✕"
+                        font.pixelSize: 14
+                        color: root.breezeTextDim
+                        visible: searchInput.text.length > 0
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: searchInput.text = ""
+                        }
+                    }
+                }
+            }
+
+            // Apps Grid
+            GridView {
+                id: appsGrid
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                cellWidth: width / 4
+                cellHeight: 96
+                clip: true
+                model: allAppsModel
+
+                delegate: ColumnLayout {
+                    width: appsGrid.cellWidth
+                    spacing: 6
+
+                    Rectangle {
+                        Layout.alignment: Qt.AlignHCenter
+                        width: 54
+                        height: 54
+                        radius: 16
+                        color: model.color
+                        border.color: root.breezeBorder
+                        border.width: 1
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: model.icon
+                            font.pixelSize: 24
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: root.launchApp(model.name)
+                        }
+                    }
+
+                    Text {
+                        text: model.name
+                        font.pixelSize: 11
+                        color: root.breezeText
+                        Layout.alignment: Qt.AlignHCenter
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+        }
+    }
+
+    // Task Switcher / Overview (Plasma 6 Carousel Switcher)
+    Rectangle {
+        id: appSwitcherPanel
+        z: 25
+        anchors.top: statusBar.bottom
+        anchors.bottom: navigationBar.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        visible: root.appSwitcherOpen
+        color: Qt.rgba(0.09, 0.11, 0.14, 0.95)
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.topMargin: 20
+            anchors.bottomMargin: 10
+            spacing: 16
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.leftMargin: 24
+                Layout.rightMargin: 24
+
+                Text {
+                    text: "Task Overview (" + openTasksModel.count + " running)"
+                    font.bold: true
+                    font.pixelSize: 16
+                    color: root.breezeText
+                }
+
+                Item { Layout.fillWidth: true }
+
+                Button {
+                    text: "Clear All"
+                    flat: true
+                    onClicked: {
+                        openTasksModel.clear();
+                        root.activeApp = "";
+                        root.appSwitcherOpen = false;
+                    }
+                }
+            }
+
+            // Card Carousel of open apps
+            ListView {
+                id: tasksListView
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                orientation: ListView.Horizontal
+                spacing: 20
+                clip: true
+                model: openTasksModel
+                preferredHighlightBegin: width / 2 - 130
+                preferredHighlightEnd: width / 2 + 130
+                highlightRangeMode: ListView.StrictlyEnforceRange
+
+                delegate: Rectangle {
+                    width: 260
+                    height: tasksListView.height - 40
+                    radius: 20
+                    color: root.breezeSurface
+                    border.color: root.breezeBorder
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 16
+                        spacing: 12
+
+                        // Card Header
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Rectangle {
+                                width: 28
+                                height: 28
+                                radius: 8
+                                color: model.color
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: model.icon
+                                    font.pixelSize: 14
+                                }
+                            }
+                            Text {
+                                text: model.name
+                                font.bold: true
+                                font.pixelSize: 15
+                                color: root.breezeText
+                            }
+                            Item { Layout.fillWidth: true }
+                            Button {
+                                text: "✕"
+                                flat: true
+                                onClicked: root.closeTask(index)
+                            }
+                        }
+
+                        // Preview Surface Placeholder
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            radius: 12
+                            color: root.breezeCard
+
+                            Text {
+                                anchors.centerIn: parent
+                                width: parent.width - 24
+                                text: model.summary
+                                font.family: "monospace"
+                                font.pixelSize: 12
+                                wrapMode: Text.WordWrap
+                                color: root.breezeTextDim
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+
+                        // Tap to switch
+                        Button {
+                            Layout.fillWidth: true
+                            text: "Switch to " + model.name
+                            highlighted: true
+                            onClicked: {
+                                root.activeApp = model.name;
+                                root.appSwitcherOpen = false;
+                            }
+                        }
                     }
                 }
             }
@@ -220,11 +556,11 @@ ApplicationWindow {
     // Plasma 6 Quick Settings Pull-Down Panel
     Rectangle {
         id: quickSettingsPanel
-        z: 30
+        z: 35
         anchors.top: statusBar.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        height: root.quickSettingsOpen ? 340 : 0
+        height: root.quickSettingsOpen ? 420 : 0
         clip: true
         color: root.breezeDark
         opacity: root.quickSettingsOpen ? 0.98 : 0.0
@@ -235,15 +571,16 @@ ApplicationWindow {
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 18
-            spacing: 16
+            spacing: 14
 
             Text {
-                text: "Plasma Quick Toggles"
+                text: "Quick Controls"
                 font.bold: true
                 font.pixelSize: 14
                 color: root.breezeTextDim
             }
 
+            // Quick Toggles Grid
             GridLayout {
                 columns: 2
                 Layout.fillWidth: true
@@ -251,25 +588,25 @@ ApplicationWindow {
                 columnSpacing: 10
 
                 Repeater {
-                    model: [
-                        { label: "Wi-Fi", active: true },
-                        { label: "Cellular", active: true },
-                        { label: "Bluetooth", active: false },
-                        { label: "Flashlight", active: false },
-                        { label: "Rotation Lock", active: true },
-                        { label: "Night Light", active: true }
-                    ]
+                    model: root.quickToggles
 
                     delegate: Rectangle {
                         Layout.fillWidth: true
                         height: 48
                         radius: 12
                         color: modelData.active ? root.breezeAccent : root.breezeSurface
+                        border.color: root.breezeBorder
 
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 14
                             anchors.rightMargin: 14
+                            spacing: 10
+
+                            Text {
+                                text: modelData.icon
+                                font.pixelSize: 16
+                            }
 
                             Text {
                                 text: modelData.label
@@ -278,8 +615,44 @@ ApplicationWindow {
                                 color: modelData.active ? "#ffffff" : root.breezeText
                             }
                         }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                modelData.active = !modelData.active;
+                                quickSettingsPanel.update();
+                            }
+                        }
                     }
                 }
+            }
+
+            // Brightness Slider
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Text { text: "☀️"; font.pixelSize: 14; color: root.breezeText }
+                Slider {
+                    id: brightnessSlider
+                    Layout.fillWidth: true
+                    value: root.brightnessVal
+                    onMoved: root.brightnessVal = value
+                }
+                Text { text: Math.round(root.brightnessVal * 100) + "%"; font.pixelSize: 12; color: root.breezeTextDim; Layout.preferredWidth: 35 }
+            }
+
+            // Volume Slider
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Text { text: "🔊"; font.pixelSize: 14; color: root.breezeText }
+                Slider {
+                    id: volumeSlider
+                    Layout.fillWidth: true
+                    value: root.volumeVal
+                    onMoved: root.volumeVal = value
+                }
+                Text { text: Math.round(root.volumeVal * 100) + "%"; font.pixelSize: 12; color: root.breezeTextDim; Layout.preferredWidth: 35 }
             }
 
             Item { Layout.fillHeight: true }
@@ -292,36 +665,37 @@ ApplicationWindow {
                 }
                 Item { Layout.fillWidth: true }
                 Button {
-                    text: "System Settings"
+                    text: "Settings"
                     onClicked: {
                         root.quickSettingsOpen = false;
-                        root.activeApp = "Settings";
+                        root.launchApp("Settings");
                     }
                 }
             }
         }
     }
 
-    // Application Mock Window (when an app is opened)
+    // Active Application Surface (when an app is open)
     Rectangle {
         id: appWindow
-        z: 15
+        z: 20
         anchors.top: statusBar.bottom
         anchors.bottom: navigationBar.top
         anchors.left: parent.left
         anchors.right: parent.right
-        visible: root.activeApp !== ""
+        visible: root.activeApp !== "" && !root.appSwitcherOpen
         color: root.breezeDark
 
         ColumnLayout {
             anchors.fill: parent
             spacing: 0
 
-            // App Header
+            // App Header Bar
             Rectangle {
                 Layout.fillWidth: true
                 height: 48
                 color: root.breezeSurface
+                border.color: root.breezeBorder
 
                 RowLayout {
                     anchors.fill: parent
@@ -345,7 +719,7 @@ ApplicationWindow {
                 }
             }
 
-            // App Content Placeholder
+            // App Content Surface
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -353,37 +727,58 @@ ApplicationWindow {
 
                 ColumnLayout {
                     anchors.centerIn: parent
-                    spacing: 12
+                    spacing: 14
+
+                    Rectangle {
+                        Layout.alignment: Qt.AlignHCenter
+                        width: 72
+                        height: 72
+                        radius: 20
+                        color: root.breezeAccentActive
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "📱"
+                            font.pixelSize: 36
+                        }
+                    }
 
                     Text {
-                        text: "Running: " + root.activeApp
-                        font.pixelSize: 18
+                        text: root.activeApp
+                        font.pixelSize: 22
                         font.bold: true
-                        color: root.breezeAccent
+                        color: root.breezeText
                         Layout.alignment: Qt.AlignHCenter
                     }
 
                     Text {
-                        text: "KDE Plasma 6 Mobile App Surface\nWayland / libhybris Client"
+                        text: "KDE Plasma 6 Mobile Surface\nWayland Client • libhybris EGL"
                         horizontalAlignment: Text.AlignHCenter
                         font.pixelSize: 13
                         color: root.breezeTextDim
                         Layout.alignment: Qt.AlignHCenter
+                    }
+
+                    Button {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: "Switch App (Overview)"
+                        onClicked: root.appSwitcherOpen = true
                     }
                 }
             }
         }
     }
 
-    // Bottom Navigation Bar (Plasma Mobile Task Navigation)
+    // Bottom Navigation Bar (Plasma 6 Mobile Task Navigation)
     Rectangle {
         id: navigationBar
-        z: 20
+        z: 30
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 52
+        height: 54
         color: root.breezeDark
+        border.color: root.breezeBorder
 
         RowLayout {
             anchors.fill: parent
@@ -403,8 +798,10 @@ ApplicationWindow {
                 MouseArea {
                     anchors.fill: parent
                     onClicked: {
-                        if (root.activeApp !== "") root.activeApp = "";
-                        else if (root.quickSettingsOpen) root.quickSettingsOpen = false;
+                        if (root.quickSettingsOpen) root.quickSettingsOpen = false;
+                        else if (root.appSwitcherOpen) root.appSwitcherOpen = false;
+                        else if (root.appDrawerOpen) root.appDrawerOpen = false;
+                        else if (root.activeApp !== "") root.activeApp = "";
                     }
                 }
             }
@@ -424,12 +821,14 @@ ApplicationWindow {
                     anchors.fill: parent
                     onClicked: {
                         root.activeApp = "";
+                        root.appSwitcherOpen = false;
+                        root.appDrawerOpen = false;
                         root.quickSettingsOpen = false;
                     }
                 }
             }
 
-            // Overview / App Switcher button
+            // Task Overview / Switcher button
             Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -438,14 +837,18 @@ ApplicationWindow {
                     width: 14
                     height: 14
                     radius: 3
-                    color: "transparent"
+                    color: root.appSwitcherOpen ? root.breezeAccent : "transparent"
                     border.color: root.breezeText
                     border.width: 2
                 }
                 MouseArea {
                     anchors.fill: parent
                     onClicked: {
-                        console.log("Toggle task switcher");
+                        root.appSwitcherOpen = !root.appSwitcherOpen;
+                        if (root.appSwitcherOpen) {
+                            root.appDrawerOpen = false;
+                            root.quickSettingsOpen = false;
+                        }
                     }
                 }
             }
