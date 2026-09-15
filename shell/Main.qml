@@ -720,49 +720,69 @@ ApplicationWindow {
             }
 
             // App Content Surface
-            Rectangle {
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: root.breezeDark
 
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    spacing: 14
+                // Interactive Terminal Component
+                TerminalView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Terminal"
+                    onCloseRequested: root.activeApp = ""
+                }
 
-                    Rectangle {
-                        Layout.alignment: Qt.AlignHCenter
-                        width: 72
-                        height: 72
-                        radius: 20
-                        color: root.breezeAccentActive
+                // Interactive Dolphin File Manager Component
+                DolphinView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Dolphin"
+                    onCloseRequested: root.activeApp = ""
+                }
+
+                // Generic Fallback View for Other Apps
+                Rectangle {
+                    anchors.fill: parent
+                    visible: root.activeApp !== "Terminal" && root.activeApp !== "Dolphin"
+                    color: root.breezeDark
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 14
+
+                        Rectangle {
+                            Layout.alignment: Qt.AlignHCenter
+                            width: 72
+                            height: 72
+                            radius: 20
+                            color: root.breezeAccentActive
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "📱"
+                                font.pixelSize: 36
+                            }
+                        }
 
                         Text {
-                            anchors.centerIn: parent
-                            text: "📱"
-                            font.pixelSize: 36
+                            text: root.activeApp
+                            font.pixelSize: 22
+                            font.bold: true
+                            color: root.breezeText
+                            Layout.alignment: Qt.AlignHCenter
                         }
-                    }
 
-                    Text {
-                        text: root.activeApp
-                        font.pixelSize: 22
-                        font.bold: true
-                        color: root.breezeText
-                        Layout.alignment: Qt.AlignHCenter
-                    }
+                        Text {
+                            text: "KDE Plasma 6 Mobile Surface\nWayland Client • libhybris EGL"
+                            horizontalAlignment: Text.AlignHCenter
+                            font.pixelSize: 13
+                            color: root.breezeTextDim
+                            Layout.alignment: Qt.AlignHCenter
+                        }
 
-                    Text {
-                        text: "KDE Plasma 6 Mobile Surface\nWayland Client • libhybris EGL"
-                        horizontalAlignment: Text.AlignHCenter
-                        font.pixelSize: 13
-                        color: root.breezeTextDim
-                        Layout.alignment: Qt.AlignHCenter
-                    }
-
-                    Button {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: "Switch App (Overview)"
-                        onClicked: root.appSwitcherOpen = true
+                        Button {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: "Switch App (Overview)"
+                            onClicked: root.appSwitcherOpen = true
+                        }
                     }
                 }
             }
