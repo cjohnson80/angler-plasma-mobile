@@ -738,10 +738,17 @@ ApplicationWindow {
                     onCloseRequested: root.activeApp = ""
                 }
 
+                // Interactive System Settings Component
+                SettingsView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Settings"
+                    onCloseRequested: root.activeApp = ""
+                }
+
                 // Generic Fallback View for Other Apps
                 Rectangle {
                     anchors.fill: parent
-                    visible: root.activeApp !== "Terminal" && root.activeApp !== "Dolphin"
+                    visible: root.activeApp !== "Terminal" && root.activeApp !== "Dolphin" && root.activeApp !== "Settings"
                     color: root.breezeDark
 
                     ColumnLayout {
