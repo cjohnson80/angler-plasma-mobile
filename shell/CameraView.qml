@@ -153,6 +153,12 @@ Rectangle {
                         anchors.fill: parent
                         onClicked: {
                             flashAnim.restart();
+                            if (typeof systemBackend !== "undefined") {
+                                var res = JSON.parse(systemBackend.capturePhoto(cameraRoot.activeCamera));
+                                if (res.success) {
+                                    console.log("Photo captured:", res.path);
+                                }
+                            }
                         }
                     }
                 }

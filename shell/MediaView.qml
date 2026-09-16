@@ -20,6 +20,30 @@ Rectangle {
         ListElement { title: "Ambient AMOLED Night"; artist: "PulseAudio Stream"; duration: "5:20" }
     }
 
+    Component.onCompleted: {
+        reloadTracks();
+    }
+
+    function reloadTracks() {
+        if (typeof systemBackend !== "undefined") {
+            try {
+                var list = JSON.parse(systemBackend.getAudioTracks());
+                if (list && list.length > 0) {
+                    playlistModel.clear();
+                    for (var i = 0; i < list.length; i++) {
+                        playlistModel.append({
+                            title: list[i].title,
+                            artist: list[i].artist,
+                            duration: list[i].duration
+                        });
+                    }
+                }
+            } catch (e) {
+                console.log("Error loading audio tracks:", e);
+            }
+        }
+    }
+
     Timer {
         interval: 1000
         repeat: true
