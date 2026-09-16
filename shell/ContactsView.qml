@@ -161,7 +161,6 @@ Rectangle {
 
             delegate: Rectangle {
                 width: contactsView.width
-                height: 64
                 color: index % 2 === 0 ? "#1c1f26" : "#22262f"
                 border.color: Qt.rgba(1, 1, 1, 0.04)
 

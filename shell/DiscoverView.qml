@@ -130,7 +130,6 @@ Rectangle {
 
             delegate: Rectangle {
                 width: packagesView.width
-                height: 74
                 color: index % 2 === 0 ? "#1e2129" : "#232731"
                 border.color: Qt.rgba(1, 1, 1, 0.04)
 
