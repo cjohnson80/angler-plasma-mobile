@@ -759,10 +759,45 @@ ApplicationWindow {
                     onCloseRequested: root.activeApp = ""
                 }
 
+                // Interactive Messages Component
+                MessagesView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Messages"
+                    onCloseRequested: root.activeApp = ""
+                }
+
+                // Interactive Notes Component
+                NotesView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Notes"
+                    onCloseRequested: root.activeApp = ""
+                }
+
+                // Interactive Clock & Timer Component
+                ClockView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Clock"
+                    onCloseRequested: root.activeApp = ""
+                }
+
+                // Interactive Calculator Component
+                CalcView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Calculator"
+                    onCloseRequested: root.activeApp = ""
+                }
+
+                // Interactive Elisa Media Player Component
+                MediaView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Media"
+                    onCloseRequested: root.activeApp = ""
+                }
+
                 // Generic Fallback View for Other Apps
                 Rectangle {
                     anchors.fill: parent
-                    visible: root.activeApp !== "Terminal" && root.activeApp !== "Dolphin" && root.activeApp !== "Settings" && root.activeApp !== "Dialer" && root.activeApp !== "Camera"
+                    visible: root.activeApp !== "Terminal" && root.activeApp !== "Dolphin" && root.activeApp !== "Settings" && root.activeApp !== "Dialer" && root.activeApp !== "Camera" && root.activeApp !== "Messages" && root.activeApp !== "Notes" && root.activeApp !== "Clock" && root.activeApp !== "Calculator" && root.activeApp !== "Media"
                     color: root.breezeDark
 
                     ColumnLayout {

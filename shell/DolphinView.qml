@@ -12,21 +12,31 @@ Rectangle {
 
     ListModel {
         id: fileModel
-        ListElement { name: ".."; isDir: true; size: ""; icon: "↩" }
-        ListElement { name: "Documents"; isDir: true; size: "4 items"; icon: "📁" }
-        ListElement { name: "Downloads"; isDir: true; size: "12 items"; icon: "📁" }
-        ListElement { name: "Pictures"; isDir: true; size: "48 items"; icon: "📁" }
-        ListElement { name: "Projects"; isDir: true; size: "6 items"; icon: "📁" }
-        ListElement { name: "angler-halium.log"; isDir: false; size: "14.2 KB"; icon: "📄" }
-        ListElement { name: "plasma-session.sh"; isDir: false; size: "1.1 KB"; icon: "⚙" }
-        ListElement { name: "wallpaper.png"; isDir: false; size: "2.8 MB"; icon: "🖼" }
+    }
+
+    Component.onCompleted: refreshFiles()
+
+    function refreshFiles() {
+        fileModel.clear();
+        if (typeof systemBackend !== "undefined") {
+            var raw = systemBackend.listDirectory(dolphinView.currentPath);
+            try {
+                var data = JSON.parse(raw);
+                dolphinView.currentPath = data.path;
+                for (var i = 0; i < data.items.length; i++) {
+                    fileModel.append(data.items[i]);
+                }
+            } catch (e) {
+                console.log("Error parsing dolphin json: " + e);
+            }
+        }
     }
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        // Dolphin Header
+        // Header
         Rectangle {
             Layout.fillWidth: true
             height: 48
@@ -47,6 +57,12 @@ Rectangle {
                 }
 
                 Button {
+                    text: "🔄"
+                    flat: true
+                    onClicked: dolphinView.refreshFiles()
+                }
+
+                Button {
                     text: "✕"
                     flat: true
                     onClicked: dolphinView.closeRequested()
@@ -57,7 +73,7 @@ Rectangle {
         // Quick Places Breadcrumbs
         Rectangle {
             Layout.fillWidth: true
-            height: 36
+            height: 38
             color: "#23262e"
 
             RowLayout {
@@ -65,24 +81,39 @@ Rectangle {
                 anchors.leftMargin: 12
                 spacing: 8
 
+                Button {
+                    text: "⬆ Up"
+                    flat: true
+                    implicitHeight: 28
+                    onClicked: {
+                        var parts = dolphinView.currentPath.split("/");
+                        parts.pop();
+                        var parentPath = parts.join("/");
+                        if (parentPath === "") parentPath = "/";
+                        dolphinView.currentPath = parentPath;
+                        dolphinView.refreshFiles();
+                    }
+                }
+
                 Repeater {
-                    model: ["Root (/)", "Home", "Shared", "USB OTG"]
+                    model: ["Root (/)", "Home", "Projects", "Tmp"]
                     delegate: Button {
                         text: modelData
                         flat: true
-                        implicitHeight: 26
+                        implicitHeight: 28
                         onClicked: {
                             if (modelData === "Root (/)") dolphinView.currentPath = "/";
                             else if (modelData === "Home") dolphinView.currentPath = "/home/chris";
-                            else if (modelData === "Shared") dolphinView.currentPath = "/data/media/0/NativOS";
-                            else dolphinView.currentPath = "/mnt/media_rw";
+                            else if (modelData === "Projects") dolphinView.currentPath = "/home/chris/Projects";
+                            else if (modelData === "Tmp") dolphinView.currentPath = "/tmp";
+                            dolphinView.refreshFiles();
                         }
                     }
                 }
             }
         }
 
-        // File List
+        // Real Live Filesystem List
         ListView {
             id: fileListView
             Layout.fillWidth: true
@@ -114,6 +145,7 @@ Rectangle {
                             font.bold: model.isDir
                             font.pixelSize: 14
                             color: "#ffffff"
+                            elide: Text.ElideRight
                         }
                         Text {
                             text: model.size
@@ -134,11 +166,8 @@ Rectangle {
                     anchors.fill: parent
                     onClicked: {
                         if (model.isDir) {
-                            if (model.name === "..") {
-                                dolphinView.currentPath = "/home";
-                            } else {
-                                dolphinView.currentPath = dolphinView.currentPath + "/" + model.name;
-                            }
+                            dolphinView.currentPath = model.fullPath;
+                            dolphinView.refreshFiles();
                         }
                     }
                 }

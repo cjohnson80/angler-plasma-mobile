@@ -1,0 +1,210 @@
+import sys
+import os
+import subprocess
+import json
+import sqlite3
+import datetime
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QUrl
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtQml import QQmlApplicationEngine
+
+class SystemBackend(QObject):
+    terminalOutputReady = pyqtSignal(str)
+    fileListReady = pyqtSignal(str)
+    alarmTriggered = pyqtSignal(str)
+
+    def __init__(self):
+        super().__init__()
+        self.data_dir = os.path.expanduser("~/.local/share/angler-plasma-mobile")
+        os.makedirs(self.data_dir, exist_ok=True)
+        self.init_db()
+
+    def init_db(self):
+        self.db_path = os.path.join(self.data_dir, "plasma_mobile.db")
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        # Messages table
+        cur.execute('''CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recipient TEXT,
+            body TEXT,
+            timestamp DATETIME,
+            is_incoming INTEGER
+        )''')
+        # Notes table
+        cur.execute('''CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            content TEXT,
+            updated_at DATETIME
+        )''')
+        # Alarms table
+        cur.execute('''CREATE TABLE IF NOT EXISTS alarms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            time_str TEXT,
+            label TEXT,
+            enabled INTEGER
+        )''')
+        conn.commit()
+        conn.close()
+
+    # --- TERMINAL BACKEND ---
+    @pyqtSlot(str, str)
+    def runTerminalCommand(self, cmd, working_dir):
+        try:
+            cwd = os.path.expanduser(working_dir) if working_dir else os.path.expanduser("~")
+            res = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=10)
+            output = res.stdout if res.stdout else res.stderr
+            if not output and res.returncode == 0:
+                output = "[Success - No Output]"
+        except subprocess.TimeoutExpired:
+            output = "Error: Command timed out."
+        except Exception as e:
+            output = f"Error: {str(e)}"
+        self.terminalOutputReady.emit(output)
+
+    # --- DOLPHIN FILE MANAGER BACKEND ---
+    @pyqtSlot(str, result=str)
+    def listDirectory(self, path):
+        target = os.path.expanduser(path) if path else os.path.expanduser("~")
+        if not os.path.exists(target) or not os.path.isdir(target):
+            return json.dumps({"error": "Directory not found", "path": target, "items": []})
+        
+        items = []
+        try:
+            entries = os.scandir(target)
+            for entry in entries:
+                try:
+                    stat = entry.stat()
+                    size_str = f"{stat.st_size} B"
+                    if stat.st_size > 1024 * 1024:
+                        size_str = f"{round(stat.st_size / (1024 * 1024), 1)} MB"
+                    elif stat.st_size > 1024:
+                        size_str = f"{round(stat.st_size / 1024, 1)} KB"
+                    
+                    items.append({
+                        "name": entry.name,
+                        "isDir": entry.is_dir(),
+                        "size": "" if entry.is_dir() else size_str,
+                        "icon": "📁" if entry.is_dir() else "📄",
+                        "fullPath": entry.path
+                    })
+                except PermissionError:
+                    continue
+        except Exception as e:
+            return json.dumps({"error": str(e), "path": target, "items": []})
+            
+        items.sort(key=lambda x: (not x["isDir"], x["name"].lower()))
+        return json.dumps({"path": target, "items": items})
+
+    # --- MESSAGING BACKEND ---
+    @pyqtSlot(result=str)
+    def getMessages(self):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("SELECT id, recipient, body, timestamp, is_incoming FROM messages ORDER BY timestamp ASC")
+        rows = cur.fetchall()
+        conn.close()
+        msgs = [{"id": r[0], "recipient": r[1], "body": r[2], "timestamp": r[3], "isIncoming": bool(r[4])} for r in rows]
+        return json.dumps(msgs)
+
+    @pyqtSlot(str, str)
+    def sendMessage(self, recipient, body):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        now = datetime.datetime.now().strftime("%H:%M")
+        cur.execute("INSERT INTO messages (recipient, body, timestamp, is_incoming) VALUES (?, ?, ?, 0)", (recipient, body, now))
+        conn.commit()
+        conn.close()
+
+    # --- NOTES BACKEND ---
+    @pyqtSlot(result=str)
+    def getNotes(self):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("SELECT id, title, content, updated_at FROM notes ORDER BY id DESC")
+        rows = cur.fetchall()
+        conn.close()
+        notes = [{"id": r[0], "title": r[1], "content": r[2], "updatedAt": r[3]} for r in rows]
+        return json.dumps(notes)
+
+    @pyqtSlot(str, str)
+    def saveNote(self, title, content):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        cur.execute("INSERT INTO notes (title, content, updated_at) VALUES (?, ?, ?)", (title, content, now))
+        conn.commit()
+        conn.close()
+
+    @pyqtSlot(int)
+    def deleteNote(self, note_id):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+        conn.commit()
+        conn.close()
+
+    # --- ALARMS & CLOCK BACKEND ---
+    @pyqtSlot(result=str)
+    def getAlarms(self):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("SELECT id, time_str, label, enabled FROM alarms ORDER BY time_str ASC")
+        rows = cur.fetchall()
+        conn.close()
+        alarms = [{"id": r[0], "time": r[1], "label": r[2], "enabled": bool(r[3])} for r in rows]
+        return json.dumps(alarms)
+
+    @pyqtSlot(str, str)
+    def addAlarm(self, time_str, label):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO alarms (time_str, label, enabled) VALUES (?, ?, 1)", (time_str, label))
+        conn.commit()
+        conn.close()
+
+    @pyqtSlot(int, bool)
+    def toggleAlarm(self, alarm_id, enabled):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("UPDATE alarms SET enabled = ? WHERE id = ?", (1 if enabled else 0, alarm_id))
+        conn.commit()
+        conn.close()
+
+    # --- HARDWARE SYSTEM CONTROLS ---
+    @pyqtSlot(str, result=str)
+    def readSysfs(self, path):
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    return f.read().strip()
+            except Exception as e:
+                return f"Error: {e}"
+        return "N/A"
+
+    @pyqtSlot(str, str)
+    def writeSysfs(self, path, val):
+        try:
+            with open(path, "w") as f:
+                f.write(val)
+        except Exception as e:
+            print(f"Error writing to {path}: {e}")
+
+def main():
+    app = QApplication(sys.argv)
+    engine = QQmlApplicationEngine()
+
+    backend = SystemBackend()
+    engine.rootContext().setContextProperty("systemBackend", backend)
+
+    qml_file = os.path.join(os.path.dirname(__file__), "Main.qml")
+    engine.load(QUrl.fromLocalFile(qml_file))
+
+    if not engine.rootObjects():
+        sys.exit(-1)
+
+    sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()
