@@ -45,6 +45,55 @@ class SystemBackend(QObject):
             label TEXT,
             enabled INTEGER
         )''')
+        # Contacts (PIM) table
+        cur.execute('''CREATE TABLE IF NOT EXISTS contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT,
+            email TEXT,
+            category TEXT DEFAULT 'Personal'
+        )''')
+        # Calendar Events (PIM) table
+        cur.execute('''CREATE TABLE IF NOT EXISTS calendar_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            date_str TEXT NOT NULL,
+            time_str TEXT,
+            location TEXT,
+            description TEXT
+        )''')
+        # Tasks / Todo (PIM) table
+        cur.execute('''CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task TEXT NOT NULL,
+            completed INTEGER DEFAULT 0,
+            due_date TEXT
+        )''')
+        # Weather cache table
+        cur.execute('''CREATE TABLE IF NOT EXISTS weather_cache (
+            id INTEGER PRIMARY KEY,
+            city TEXT,
+            temp_c REAL,
+            condition TEXT,
+            humidity INTEGER,
+            wind_speed REAL,
+            updated_at DATETIME
+        )''')
+        # Insert initial default contacts if empty
+        cur.execute("SELECT COUNT(*) FROM contacts")
+        if cur.fetchone()[0] == 0:
+            cur.executemany("INSERT INTO contacts (name, phone, email, category) VALUES (?, ?, ?, ?)", [
+                ("Nexus Emergency", "911", "emergency@local", "Emergency"),
+                ("Linux Kernel Team", "555-0199", "torvalds@kernel.org", "Work"),
+                ("KDE Mobile Community", "555-0142", "plasma@kde.org", "Community"),
+                ("Halium Porter", "555-0188", "angler@halium.org", "Dev")
+            ])
+        # Insert initial sample calendar event if empty
+        cur.execute("SELECT COUNT(*) FROM calendar_events")
+        if cur.fetchone()[0] == 0:
+            today_str = datetime.date.today().isoformat()
+            cur.execute("INSERT INTO calendar_events (title, date_str, time_str, location, description) VALUES (?, ?, ?, ?, ?)",
+                        ("Nexus 6P Plasma Mobile Bringup", today_str, "10:00 AM", "Huawei Nexus 6P", "First boot and validation of Wayland/Qt6 shell on Halium 7.1"))
         conn.commit()
         conn.close()
 
@@ -171,6 +220,253 @@ class SystemBackend(QObject):
         cur.execute("UPDATE alarms SET enabled = ? WHERE id = ?", (1 if enabled else 0, alarm_id))
         conn.commit()
         conn.close()
+
+    # --- PIM: CONTACTS BACKEND ---
+    @pyqtSlot(result=str)
+    def getContacts(self):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("SELECT id, name, phone, email, category FROM contacts ORDER BY name ASC")
+        rows = cur.fetchall()
+        conn.close()
+        contacts = [{"id": r[0], "name": r[1], "phone": r[2], "email": r[3], "category": r[4]} for r in rows]
+        return json.dumps(contacts)
+
+    @pyqtSlot(str, str, str, str)
+    def saveContact(self, name, phone, email, category):
+        if not name:
+            return
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO contacts (name, phone, email, category) VALUES (?, ?, ?, ?)", (name, phone, email, category))
+        conn.commit()
+        conn.close()
+
+    @pyqtSlot(int)
+    def deleteContact(self, contact_id):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM contacts WHERE id = ?", (contact_id,))
+        conn.commit()
+        conn.close()
+
+    # --- PIM: CALENDAR EVENTS BACKEND ---
+    @pyqtSlot(str, result=str)
+    def getEvents(self, date_str):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        if date_str:
+            cur.execute("SELECT id, title, date_str, time_str, location, description FROM calendar_events WHERE date_str = ? ORDER BY time_str ASC", (date_str,))
+        else:
+            cur.execute("SELECT id, title, date_str, time_str, location, description FROM calendar_events ORDER BY date_str ASC, time_str ASC")
+        rows = cur.fetchall()
+        conn.close()
+        events = [{"id": r[0], "title": r[1], "date": r[2], "time": r[3], "location": r[4], "description": r[5]} for r in rows]
+        return json.dumps(events)
+
+    @pyqtSlot(str, str, str, str, str)
+    def addEvent(self, title, date_str, time_str, location, description):
+        if not title or not date_str:
+            return
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO calendar_events (title, date_str, time_str, location, description) VALUES (?, ?, ?, ?, ?)",
+                    (title, date_str, time_str, location, description))
+        conn.commit()
+        conn.close()
+
+    @pyqtSlot(int)
+    def deleteEvent(self, event_id):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM calendar_events WHERE id = ?", (event_id,))
+        conn.commit()
+        conn.close()
+
+    # --- PIM: TASKS / TODO BACKEND ---
+    @pyqtSlot(result=str)
+    def getTasks(self):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("SELECT id, task, completed, due_date FROM tasks ORDER BY completed ASC, id DESC")
+        rows = cur.fetchall()
+        conn.close()
+        tasks = [{"id": r[0], "task": r[1], "completed": bool(r[2]), "dueDate": r[3]} for r in rows]
+        return json.dumps(tasks)
+
+    @pyqtSlot(str, str)
+    def addTask(self, task, due_date):
+        if not task:
+            return
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO tasks (task, completed, due_date) VALUES (?, 0, ?)", (task, due_date))
+        conn.commit()
+        conn.close()
+
+    @pyqtSlot(int, bool)
+    def toggleTask(self, task_id, completed):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("UPDATE tasks SET completed = ? WHERE id = ?", (1 if completed else 0, task_id))
+        conn.commit()
+        conn.close()
+
+    @pyqtSlot(int)
+    def deleteTask(self, task_id):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        conn.commit()
+        conn.close()
+
+    # --- WEATHER BACKEND ---
+    @pyqtSlot(str, result=str)
+    def getWeather(self, city):
+        """Fetches live weather via wttr.in or returns offline sensor cache"""
+        target_city = city if city else "Denver"
+        # Attempt network fetch with 2s timeout
+        try:
+            import urllib.request
+            url = f"https://wttr.in/{urllib.parse.quote(target_city)}?format=j1"
+            req = urllib.request.Request(url, headers={"User-Agent": "PlasmaMobile/6.0 Nexus6P"})
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                data = json.loads(resp.read().decode())
+                current = data.get("current_condition", [{}])[0]
+                temp_c = float(current.get("temp_C", 20))
+                desc = current.get("weatherDesc", [{}])[0].get("value", "Clear")
+                humidity = int(current.get("humidity", 40))
+                wind = float(current.get("windspeedKmph", 10))
+                
+                # Cache to sqlite
+                conn = sqlite3.connect(self.db_path)
+                cur = conn.cursor()
+                now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                cur.execute("INSERT OR REPLACE INTO weather_cache (id, city, temp_c, condition, humidity, wind_speed, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?)",
+                            (target_city, temp_c, desc, humidity, wind, now))
+                conn.commit()
+                conn.close()
+                return json.dumps({
+                    "city": target_city,
+                    "temp_c": round(temp_c),
+                    "temp_f": round(temp_c * 9/5 + 32),
+                    "condition": desc,
+                    "humidity": humidity,
+                    "wind_speed": wind,
+                    "is_live": True,
+                    "updated_at": now
+                })
+        except Exception:
+            pass
+
+        # Fallback to local SQLite cache
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute("SELECT city, temp_c, condition, humidity, wind_speed, updated_at FROM weather_cache WHERE id = 1")
+            row = cur.fetchone()
+            conn.close()
+            if row:
+                return json.dumps({
+                    "city": row[0],
+                    "temp_c": round(row[1]),
+                    "temp_f": round(row[1] * 9/5 + 32),
+                    "condition": row[2],
+                    "humidity": row[3],
+                    "wind_speed": row[4],
+                    "is_live": False,
+                    "updated_at": row[5]
+                })
+        except Exception:
+            pass
+
+        return json.dumps({
+            "city": target_city,
+            "temp_c": 21,
+            "temp_f": 70,
+            "condition": "Partly Cloudy",
+            "humidity": 35,
+            "wind_speed": 12,
+            "is_live": False,
+            "updated_at": "Offline Default"
+        })
+
+    # --- ANGELFISH BROWSER BACKEND ---
+    @pyqtSlot(str, result=str)
+    def fetchWebPage(self, url):
+        """Fetches web page content with timeout and returns parsed title & snippet"""
+        target_url = url if url.startswith("http") else f"https://{url}"
+        try:
+            import urllib.request
+            req = urllib.request.Request(target_url, headers={"User-Agent": "Mozilla/5.0 (Mobile; Plasma/6.0; Nexus6P; Linux aarch64) AppleWebKit/537.36"})
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                raw_html = resp.read().decode('utf-8', errors='ignore')
+                import re
+                title_match = re.search(r'<title>(.*?)</title>', raw_html, re.IGNORECASE | re.DOTALL)
+                title = title_match.group(1).strip() if title_match else target_url
+                
+                # Strip basic html tags for text preview
+                clean_text = re.sub(r'<script.*?</script>', '', raw_html, flags=re.DOTALL | re.IGNORECASE)
+                clean_text = re.sub(r'<style.*?</style>', '', clean_text, flags=re.DOTALL | re.IGNORECASE)
+                clean_text = re.sub(r'<[^<]+?>', ' ', clean_text)
+                clean_text = re.sub(r'\s+', ' ', clean_text).strip()[:300]
+                
+                return json.dumps({
+                    "url": target_url,
+                    "title": title,
+                    "snippet": clean_text,
+                    "status": "Loaded"
+                })
+        except Exception as e:
+            return json.dumps({
+                "url": target_url,
+                "title": f"Offline / Error: {url}",
+                "snippet": f"Could not reach {target_url}: {str(e)}",
+                "status": "Failed"
+            })
+
+    # --- DISCOVER PACKAGE MANAGER BACKEND ---
+    @pyqtSlot(str, result=str)
+    def searchPackages(self, query):
+        """Searches local pacman / flatpak or returns curated mobile packages"""
+        pkgs = [
+            {"name": "plasma-mobile", "version": "6.0.4", "repo": "KDE", "desc": "KDE Plasma phone experience for Linux", "installed": True},
+            {"name": "angelfish", "version": "24.02", "repo": "Extra", "desc": "Mobile touch-friendly web browser", "installed": True},
+            {"name": "koko", "version": "24.02", "repo": "KDE", "desc": "Image gallery viewer for Plasma Mobile", "installed": False},
+            {"name": "audiotube", "version": "24.02", "repo": "Extra", "desc": "YouTube Music client for mobile", "installed": False},
+            {"name": "neochat", "version": "24.02", "repo": "KDE", "desc": "Matrix client for Plasma Mobile", "installed": False},
+            {"name": "alligator", "version": "24.02", "repo": "KDE", "desc": "Kirigami RSS and Atom feed reader", "installed": False},
+            {"name": "itinerary", "version": "24.02", "repo": "KDE", "desc": "Digital travel assistant", "installed": False},
+            {"name": "tokodon", "version": "24.02", "repo": "KDE", "desc": "Mastodon and Fediverse mobile client", "installed": False},
+            {"name": "libhybris", "version": "0.1.0", "repo": "Halium", "desc": "Android HAL bridge libraries", "installed": True},
+            {"name": "wayland", "version": "1.23.0", "repo": "Core", "desc": "Wayland display server protocol", "installed": True}
+        ]
+        
+        # If real pacman is available, query it
+        if query:
+            q_lower = query.lower()
+            filtered = [p for p in pkgs if q_lower in p["name"].lower() or q_lower in p["desc"].lower()]
+            try:
+                res = subprocess.run(["pacman", "-Ss", query], capture_output=True, text=True, timeout=3)
+                if res.returncode == 0 and res.stdout:
+                    # Parse pacman matches
+                    lines = res.stdout.strip().split("\n")
+                    for i in range(0, min(len(lines), 10), 2):
+                        header = lines[i].split()
+                        desc = lines[i+1].strip() if i+1 < len(lines) else ""
+                        if len(header) >= 2:
+                            filtered.append({
+                                "name": header[0].split("/")[-1],
+                                "version": header[1],
+                                "repo": header[0].split("/")[0],
+                                "desc": desc,
+                                "installed": "[installed]" in lines[i]
+                            })
+            except Exception:
+                pass
+            return json.dumps(filtered)
+            
+        return json.dumps(pkgs)
 
     # --- HARDWARE SYSTEM CONTROLS ---
     @pyqtSlot(str, result=str)

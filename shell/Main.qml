@@ -53,6 +53,10 @@ ApplicationWindow {
         ListElement { name: "Clock"; icon: "⏰"; color: "#f39c12"; desc: "Alarms, timers & stopwatch" }
         ListElement { name: "Media"; icon: "🎵"; color: "#16a085"; desc: "Elisa music player" }
         ListElement { name: "Notes"; icon: "📝"; color: "#8e44ad"; desc: "Quick notes and memos" }
+        ListElement { name: "Contacts"; icon: "👥"; color: "#2980b9"; desc: "Address book and phonebook" }
+        ListElement { name: "Calendar"; icon: "📅"; color: "#e67e22"; desc: "Agenda and calendar events" }
+        ListElement { name: "Tasks"; icon: "✓"; color: "#27ae60"; desc: "To-do lists and reminders" }
+        ListElement { name: "Weather"; icon: "⛅"; color: "#3498db"; desc: "Forecast and atmospheric metrics" }
     }
 
     // Quick toggle states
@@ -794,10 +798,55 @@ ApplicationWindow {
                     onCloseRequested: root.activeApp = ""
                 }
 
+                // Interactive Contacts PIM Component
+                ContactsView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Contacts"
+                    onCloseRequested: root.activeApp = ""
+                    onContactSelected: (name, phone) => {
+                        root.launchApp("Dialer");
+                    }
+                }
+
+                // Interactive Calendar PIM Component
+                CalendarView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Calendar"
+                    onCloseRequested: root.activeApp = ""
+                }
+
+                // Interactive Tasks PIM Component
+                TasksView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Tasks"
+                    onCloseRequested: root.activeApp = ""
+                }
+
+                // Interactive Weather Component
+                WeatherView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Weather"
+                    onCloseRequested: root.activeApp = ""
+                }
+
+                // Interactive Angelfish Web Browser Component
+                BrowserView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Angelfish"
+                    onCloseRequested: root.activeApp = ""
+                }
+
+                // Interactive Discover Software Center Component
+                DiscoverView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Discover"
+                    onCloseRequested: root.activeApp = ""
+                }
+
                 // Generic Fallback View for Other Apps
                 Rectangle {
                     anchors.fill: parent
-                    visible: root.activeApp !== "Terminal" && root.activeApp !== "Dolphin" && root.activeApp !== "Settings" && root.activeApp !== "Dialer" && root.activeApp !== "Camera" && root.activeApp !== "Messages" && root.activeApp !== "Notes" && root.activeApp !== "Clock" && root.activeApp !== "Calculator" && root.activeApp !== "Media"
+                    visible: root.activeApp !== "" && root.activeApp !== "Terminal" && root.activeApp !== "Dolphin" && root.activeApp !== "Settings" && root.activeApp !== "Dialer" && root.activeApp !== "Camera" && root.activeApp !== "Messages" && root.activeApp !== "Notes" && root.activeApp !== "Clock" && root.activeApp !== "Calculator" && root.activeApp !== "Media" && root.activeApp !== "Contacts" && root.activeApp !== "Calendar" && root.activeApp !== "Tasks" && root.activeApp !== "Weather" && root.activeApp !== "Angelfish" && root.activeApp !== "Discover"
                     color: root.breezeDark
 
                     ColumnLayout {
