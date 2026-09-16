@@ -191,6 +191,104 @@ class SystemBackend(QObject):
         except Exception as e:
             print(f"Error writing to {path}: {e}")
 
+    @pyqtSlot(result=str)
+    def getSystemStats(self):
+        """Returns live hardware metrics (CPU, RAM, Battery, Thermal, Uptime)"""
+        stats = {
+            "uptime": "Unknown",
+            "cpu_usage": 0,
+            "ram_total": "3.0 GB",
+            "ram_used": "0 MB",
+            "ram_percent": 0,
+            "battery_percent": 100,
+            "battery_status": "Discharging",
+            "cpu_temp": "N/A",
+            "active_cores": 4
+        }
+        try:
+            # Uptime
+            if os.path.exists("/proc/uptime"):
+                with open("/proc/uptime", "r") as f:
+                    up_secs = int(float(f.readline().split()[0]))
+                    h = up_secs // 3600
+                    m = (up_secs % 3600) // 60
+                    stats["uptime"] = f"{h}h {m}m"
+            
+            # RAM
+            if os.path.exists("/proc/meminfo"):
+                mem = {}
+                with open("/proc/meminfo", "r") as f:
+                    for line in f:
+                        parts = line.split(":")
+                        if len(parts) == 2:
+                            mem[parts[0].strip()] = int(parts[1].strip().split()[0])
+                total_kb = mem.get("MemTotal", 1)
+                avail_kb = mem.get("MemAvailable", mem.get("MemFree", 0))
+                used_kb = total_kb - avail_kb
+                stats["ram_total"] = f"{round(total_kb / (1024 * 1024), 1)} GB"
+                stats["ram_used"] = f"{round(used_kb / 1024)} MB"
+                stats["ram_percent"] = round((used_kb / total_kb) * 100)
+
+            # Battery (sysfs)
+            batt_dirs = [p for p in os.listdir("/sys/class/power_supply") if "batt" in p.lower()] if os.path.exists("/sys/class/power_supply") else []
+            if batt_dirs:
+                b_dir = os.path.join("/sys/class/power_supply", batt_dirs[0])
+                cap_file = os.path.join(b_dir, "capacity")
+                stat_file = os.path.join(b_dir, "status")
+                if os.path.exists(cap_file):
+                    with open(cap_file, "r") as f:
+                        stats["battery_percent"] = int(f.read().strip())
+                if os.path.exists(stat_file):
+                    with open(stat_file, "r") as f:
+                        stats["battery_status"] = f.read().strip()
+            
+            # Thermals
+            tz0 = "/sys/class/thermal/thermal_zone0/temp"
+            if os.path.exists(tz0):
+                with open(tz0, "r") as f:
+                    temp_raw = int(f.read().strip())
+                    stats["cpu_temp"] = f"{round(temp_raw / 1000, 1)}°C" if temp_raw > 1000 else f"{temp_raw}°C"
+
+        except Exception as e:
+            stats["error"] = str(e)
+
+        return json.dumps(stats)
+
+    @pyqtSlot(str, result=str)
+    def setCpuGovernor(self, governor):
+        """Sets the CPU scaling governor across active online cores"""
+        success_cores = []
+        for cpu in range(4):
+            gov_path = f"/sys/devices/system/cpu/cpu{cpu}/cpufreq/scaling_governor"
+            if os.path.exists(gov_path):
+                try:
+                    with open(gov_path, "w") as f:
+                        f.write(governor)
+                    success_cores.append(cpu)
+                except Exception:
+                    pass
+        return f"Applied {governor} to cores: {success_cores}"
+
+    @pyqtSlot(result=str)
+    def getWifiNetworks(self):
+        """Scans for local Wi-Fi SSIDs using nmcli or iwlist if available"""
+        networks = []
+        try:
+            res = subprocess.run(["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi"], capture_output=True, text=True, timeout=5)
+            if res.returncode == 0:
+                for line in res.stdout.strip().split("\n"):
+                    if line:
+                        parts = line.split(":")
+                        if len(parts) >= 2 and parts[0]:
+                            networks.append({
+                                "ssid": parts[0],
+                                "signal": parts[1] + "%",
+                                "security": parts[2] if len(parts) > 2 else "Open"
+                            })
+        except Exception:
+            pass
+        return json.dumps(networks)
+
 def main():
     app = QApplication(sys.argv)
     engine = QQmlApplicationEngine()

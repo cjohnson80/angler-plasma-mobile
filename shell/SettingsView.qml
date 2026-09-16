@@ -10,12 +10,49 @@ Rectangle {
 
     property string currentSection: "About"
 
-    // Mock system state
+    // Real system state
     property bool wifiEnabled: true
     property bool btEnabled: false
     property bool mobileDataEnabled: true
     property bool nightLightEnabled: true
     property string governor: "interactive"
+
+    property string uptimeStr: "Loading..."
+    property string ramUsageStr: "Loading..."
+    property string batteryPercentStr: "100%"
+    property string batteryStatusStr: "Discharging"
+    property string cpuTempStr: "42°C"
+    property var wifiNetworksList: []
+
+    Timer {
+        id: statsTimer
+        interval: 3000
+        repeat: true
+        running: true
+        triggeredOnStart: true
+        onTriggered: {
+            if (typeof systemBackend !== "undefined") {
+                try {
+                    var stats = JSON.parse(systemBackend.getSystemStats());
+                    settingsView.uptimeStr = stats.uptime || "N/A";
+                    settingsView.ramUsageStr = (stats.ram_used || "0 MB") + " / " + (stats.ram_total || "3.0 GB");
+                    settingsView.batteryPercentStr = (stats.battery_percent || 100) + "%";
+                    settingsView.batteryStatusStr = stats.battery_status || "Discharging";
+                    settingsView.cpuTempStr = stats.cpu_temp || "N/A";
+                } catch (e) {
+                    console.log("Stats parse error:", e);
+                }
+            }
+        }
+    }
+
+    function scanWifi() {
+        if (typeof systemBackend !== "undefined") {
+            try {
+                settingsView.wifiNetworksList = JSON.parse(systemBackend.getWifiNetworks());
+            } catch (e) {}
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -242,7 +279,12 @@ Rectangle {
                                 Layout.fillWidth: true
                                 text: modelData
                                 highlighted: settingsView.governor === modelData
-                                onClicked: settingsView.governor = modelData
+                                onClicked: {
+                                    settingsView.governor = modelData;
+                                    if (typeof systemBackend !== "undefined") {
+                                        systemBackend.setCpuGovernor(modelData);
+                                    }
+                                }
                             }
                         }
                     }
@@ -257,7 +299,21 @@ Rectangle {
                             anchors.fill: parent
                             anchors.margins: 14
                             Text { text: "BLOD 4-Core Fail-Safe Mode"; font.bold: true; color: "#ffffff"; Layout.fillWidth: true }
-                            Text { text: "Active (A53 Cluster)"; font.bold: true; color: "#2ecc71" }
+                            Text { text: "Active (Cores 0-3 @ 1.55 GHz)"; font.bold: true; color: "#2ecc71" }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 54
+                        radius: 10
+                        color: "#23262e"
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 14
+                            Text { text: "SoC Core Temperature"; font.bold: true; color: "#ffffff"; Layout.fillWidth: true }
+                            Text { text: settingsView.cpuTempStr; font.bold: true; color: "#f39c12" }
                         }
                     }
                 }
@@ -277,9 +333,9 @@ Rectangle {
                         ColumnLayout {
                             anchors.centerIn: parent
                             spacing: 6
-                            Text { text: "🔋 85% Remaining"; font.bold: true; font.pixelSize: 22; color: "#3daee9"; Layout.alignment: Qt.AlignHCenter }
-                            Text { text: "3450 mAh Li-Po Battery • Discharging"; font.pixelSize: 12; color: "#a0a5ad"; Layout.alignment: Qt.AlignHCenter }
-                            Text { text: "Estimated runtime: 8h 35m"; font.pixelSize: 12; color: "#2ecc71"; Layout.alignment: Qt.AlignHCenter }
+                            Text { text: "🔋 " + settingsView.batteryPercentStr + " Remaining"; font.bold: true; font.pixelSize: 22; color: "#3daee9"; Layout.alignment: Qt.AlignHCenter }
+                            Text { text: "3450 mAh Li-Po Battery • " + settingsView.batteryStatusStr; font.pixelSize: 12; color: "#a0a5ad"; Layout.alignment: Qt.AlignHCenter }
+                            Text { text: "System Uptime: " + settingsView.uptimeStr; font.pixelSize: 12; color: "#2ecc71"; Layout.alignment: Qt.AlignHCenter }
                         }
                     }
                 }
