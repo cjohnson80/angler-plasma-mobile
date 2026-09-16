@@ -745,10 +745,24 @@ ApplicationWindow {
                     onCloseRequested: root.activeApp = ""
                 }
 
+                // Interactive Dialer Component
+                DialerView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Dialer"
+                    onCloseRequested: root.activeApp = ""
+                }
+
+                // Interactive Camera Component
+                CameraView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Camera"
+                    onCloseRequested: root.activeApp = ""
+                }
+
                 // Generic Fallback View for Other Apps
                 Rectangle {
                     anchors.fill: parent
-                    visible: root.activeApp !== "Terminal" && root.activeApp !== "Dolphin" && root.activeApp !== "Settings"
+                    visible: root.activeApp !== "Terminal" && root.activeApp !== "Dolphin" && root.activeApp !== "Settings" && root.activeApp !== "Dialer" && root.activeApp !== "Camera"
                     color: root.breezeDark
 
                     ColumnLayout {
