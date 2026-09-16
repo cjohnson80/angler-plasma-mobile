@@ -57,6 +57,7 @@ ApplicationWindow {
         ListElement { name: "Calendar"; icon: "📅"; color: "#e67e22"; desc: "Agenda and calendar events" }
         ListElement { name: "Tasks"; icon: "✓"; color: "#27ae60"; desc: "To-do lists and reminders" }
         ListElement { name: "Weather"; icon: "⛅"; color: "#3498db"; desc: "Forecast and atmospheric metrics" }
+        ListElement { name: "Mail"; icon: "✉"; color: "#c0392b"; desc: "Email client and inbox" }
     }
 
     // Quick toggle states
@@ -843,10 +844,17 @@ ApplicationWindow {
                     onCloseRequested: root.activeApp = ""
                 }
 
+                // Interactive Email PIM Component
+                EmailView {
+                    anchors.fill: parent
+                    visible: root.activeApp === "Mail"
+                    onCloseRequested: root.activeApp = ""
+                }
+
                 // Generic Fallback View for Other Apps
                 Rectangle {
                     anchors.fill: parent
-                    visible: root.activeApp !== "" && root.activeApp !== "Terminal" && root.activeApp !== "Dolphin" && root.activeApp !== "Settings" && root.activeApp !== "Dialer" && root.activeApp !== "Camera" && root.activeApp !== "Messages" && root.activeApp !== "Notes" && root.activeApp !== "Clock" && root.activeApp !== "Calculator" && root.activeApp !== "Media" && root.activeApp !== "Contacts" && root.activeApp !== "Calendar" && root.activeApp !== "Tasks" && root.activeApp !== "Weather" && root.activeApp !== "Angelfish" && root.activeApp !== "Discover"
+                    visible: root.activeApp !== "" && root.activeApp !== "Terminal" && root.activeApp !== "Dolphin" && root.activeApp !== "Settings" && root.activeApp !== "Dialer" && root.activeApp !== "Camera" && root.activeApp !== "Messages" && root.activeApp !== "Notes" && root.activeApp !== "Clock" && root.activeApp !== "Calculator" && root.activeApp !== "Media" && root.activeApp !== "Contacts" && root.activeApp !== "Calendar" && root.activeApp !== "Tasks" && root.activeApp !== "Weather" && root.activeApp !== "Angelfish" && root.activeApp !== "Discover" && root.activeApp !== "Mail"
                     color: root.breezeDark
 
                     ColumnLayout {

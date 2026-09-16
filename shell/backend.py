@@ -79,6 +79,17 @@ class SystemBackend(QObject):
             wind_speed REAL,
             updated_at DATETIME
         )''')
+        # Email (PIM) table
+        cur.execute('''CREATE TABLE IF NOT EXISTS emails (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender TEXT NOT NULL,
+            sender_email TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            body TEXT NOT NULL,
+            date_str TEXT NOT NULL,
+            is_read INTEGER DEFAULT 0,
+            is_starred INTEGER DEFAULT 0
+        )''')
         # Insert initial default contacts if empty
         cur.execute("SELECT COUNT(*) FROM contacts")
         if cur.fetchone()[0] == 0:
@@ -94,6 +105,14 @@ class SystemBackend(QObject):
             today_str = datetime.date.today().isoformat()
             cur.execute("INSERT INTO calendar_events (title, date_str, time_str, location, description) VALUES (?, ?, ?, ?, ?)",
                         ("Nexus 6P Plasma Mobile Bringup", today_str, "10:00 AM", "Huawei Nexus 6P", "First boot and validation of Wayland/Qt6 shell on Halium 7.1"))
+        # Insert initial sample emails if empty
+        cur.execute("SELECT COUNT(*) FROM emails")
+        if cur.fetchone()[0] == 0:
+            cur.executemany("INSERT INTO emails (sender, sender_email, subject, body, date_str, is_read, is_starred) VALUES (?, ?, ?, ?, ?, ?, ?)", [
+                ("KDE Plasma Mobile", "release@kde.org", "Welcome to Plasma 6 Mobile!", "Congratulations on launching KDE Plasma 6 Mobile on your Huawei Nexus 6P. You are running a native Wayland environment on top of Linux and libhybris.", "Sep 16", 0, 1),
+                ("Linus Torvalds", "torvalds@linux-foundation.org", "MSM8994 4-Core BLOD Fix", "The patch disabling cpu4-7 in the device tree table ensures hardware stability without A57 core degradation. Happy hacking.", "Sep 15", 1, 1),
+                ("Arch Linux ARM", "security@archlinuxarm.org", "Package updates available for aarch64", "Your glibc and systemd base installation has 12 security updates available in extra-arm. Use Discover or terminal to update.", "Sep 14", 1, 0)
+            ])
         conn.commit()
         conn.close()
 
@@ -317,6 +336,62 @@ class SystemBackend(QObject):
         conn = sqlite3.connect(self.db_path)
         cur = conn.cursor()
         cur.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        conn.commit()
+        conn.close()
+
+    # --- PIM: EMAIL BACKEND ---
+    @pyqtSlot(result=str)
+    def getEmails(self):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("SELECT id, sender, sender_email, subject, body, date_str, is_read, is_starred FROM emails ORDER BY id DESC")
+        rows = cur.fetchall()
+        conn.close()
+        emails = [{
+            "id": r[0],
+            "sender": r[1],
+            "senderEmail": r[2],
+            "subject": r[3],
+            "body": r[4],
+            "dateStr": r[5],
+            "isRead": bool(r[6]),
+            "isStarred": bool(r[7])
+        } for r in rows]
+        return json.dumps(emails)
+
+    @pyqtSlot(str, str, str)
+    def sendEmail(self, recipient_email, subject, body):
+        if not recipient_email or not subject:
+            return
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        now_str = datetime.datetime.now().strftime("%b %d")
+        cur.execute("INSERT INTO emails (sender, sender_email, subject, body, date_str, is_read, is_starred) VALUES (?, ?, ?, ?, ?, 1, 0)",
+                    ("Me", recipient_email, subject, body, now_str))
+        conn.commit()
+        conn.close()
+
+    @pyqtSlot(int, bool)
+    def toggleStarEmail(self, email_id, is_starred):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("UPDATE emails SET is_starred = ? WHERE id = ?", (1 if is_starred else 0, email_id))
+        conn.commit()
+        conn.close()
+
+    @pyqtSlot(int)
+    def markEmailRead(self, email_id):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("UPDATE emails SET is_read = 1 WHERE id = ?", (email_id,))
+        conn.commit()
+        conn.close()
+
+    @pyqtSlot(int)
+    def deleteEmail(self, email_id):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM emails WHERE id = ?", (email_id,))
         conn.commit()
         conn.close()
 
